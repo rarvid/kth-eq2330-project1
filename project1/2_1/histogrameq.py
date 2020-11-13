@@ -7,7 +7,7 @@ from matplotlib import pyplot as plt   # plotting
 from PIL import Image
 
 ############################## Histogram #########################################
-X = cv2.imread('lena512.bmp', cv2.IMREAD_GRAYSCALE)
+X = cv2.imread('../lena512.bmp', cv2.IMREAD_GRAYSCALE)
 # Read in image
 hist = cv2.calcHist([X], [0], None, [256], [0,256])
 # Calculate histogram of image
@@ -25,7 +25,7 @@ plt.clf()
 # clears figure
 ############################### Low-contrast img and histogram ##################
 
-lena = Image.open('lena512.bmp')
+lena = Image.open('../lena512.bmp')
 # load image
 lena_ar = np.asarray(lena)
 # make image into array

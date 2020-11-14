@@ -10,5 +10,6 @@ X = cv2.imread('../lena.512.bmp')
 
 n = mynoisegen('saltpepper', 512, 512, 0.05, 0.05);
 
-n = np.array(n)
+n = np.array(255 * n)
+print(n)
 Image.fromarray(n.astype(np.uint8), "L").save("noisetest.bmp")

@@ -1,0 +1,7 @@
+# sym links:
+mynoisegen.py
+myblurgen.py
+lena*
+
+#
+__pycache__

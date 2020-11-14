@@ -33,18 +33,9 @@ def mynoisegen(type, m, n, param1 = None, param2 = None):
         
         nn = numpy.random.rand(m,n)
         
-        out = []        
-        for x in nn:
-            new = []
-            for y in x:
-                if y <= param1:
-                    print('here 0')
-                    new.append(0)
-                if y > param1 and y<= (param1 + param2):
-                    print('here 1')
-                    new.append(1)
-            out.append(new)
+        noise[nn <= param1] = 0
+        noise[(nn > param1) & (nn <=param1 + param2)] = 1
         
-        return out
+        return noise
     else:
         raise Exception('Unknown noise type')

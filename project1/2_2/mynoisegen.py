@@ -38,11 +38,11 @@ def mynoisegen(type, m, n, param1 = None, param2 = None):
             new = []
             for y in x:
                 if y <= param1:
-                    print('here 0')
                     new.append(0)
-                if y > param1 and y<= (param1 + param2):
-                    print('here 1')
+                elif y > param1 and y<= (param1 + param2):
                     new.append(1)
+                else:
+                    new.append(0.5)
             out.append(new)
         
         return out

@@ -34,10 +34,10 @@ b = 50
 
 lc_array = np.minimum(np.maximum((a * lena_ar + b), 0), 255)
 # apply low contrast function
-Image.fromarray(lc_array.astype(np.uint8), 'L').save('lc_lena.bmp')
+Image.fromarray(lc_array.astype(np.uint8), 'L').save('lc_lena.png')
 # convert low contrast array to image and save
 
-lc_img = cv2.imread('lc_lena.bmp', cv2.IMREAD_GRAYSCALE)
+lc_img = cv2.imread('lc_lena.png', cv2.IMREAD_GRAYSCALE)
 # load low contrast image
 lc_hist = cv2.calcHist([lc_img], [0], None, [256], [0,256])
 # calculate histogram of low contrast image
@@ -77,10 +77,10 @@ for i in range(512):
         lc_img_eq[j,i] = lc_histcmf[g]
 # histogram equalization
 
-Image.fromarray(lc_img_eq.astype(np.uint8), 'L').save('lc_lena_eq.bmp')
+Image.fromarray(lc_img_eq.astype(np.uint8), 'L').save('lc_lena_eq.png')
 # same equalized histogram as image
 
-eq_img = cv2.imread('lc_lena_eq.bmp', cv2.IMREAD_GRAYSCALE)
+eq_img = cv2.imread('lc_lena_eq.png', cv2.IMREAD_GRAYSCALE)
 eq_hist = cv2.calcHist([eq_img], [0], None, [256], [0,256])
 # recaululate the equalized histogram
 

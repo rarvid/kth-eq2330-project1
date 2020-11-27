@@ -105,12 +105,13 @@ plt.clf()
 
 ##################gauss############################
 meanFilteredGaus = sps.convolve2d(gausnoiseLena, meanFilt, mode='full', boundary='symm')\
-
+# apply 3 x 3 mean filter on lena with gaussian noise
 cv2.imwrite('meanFilteredGausLena.png', meanFilteredGaus)
-
+# same filtered image
 meanFilteredGausHist = cv2.calcHist([np.uint8(meanFilteredGaus)], [0], None, [256], [0,256])
-
+# calculate histogram of image
 meanFilteredGausHistpdf = meanFilteredGausHist/(512 * 512)
+# calculate pdf
 
 plt.plot(meanFilteredGausHistpdf)
 plt.title('Histogram of mean filtered Lena with gaussian noise')

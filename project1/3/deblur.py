@@ -18,6 +18,7 @@ from scipy.signal import convolve2d as conv2
 from skimage import io as skio
 
 import myblurgen
+import mynoisegen
 
 fft2=np.fft.fft2
 ifft2=np.fft.ifft2
@@ -43,7 +44,7 @@ def plot_spectre(img, title=""):
 
 #%%
 # Load the image.
-im = skio.imread("man512_outoffocus.bmp")
+im = skio.imread("lena512.bmp")
 # remove the colors if it's not a grey image.
 if len(im.shape) == 3:
     im = im[:,:,0]
@@ -134,10 +135,10 @@ plot_image(y)
 #%%
 print("=================================")
 
-plot_image(im, "blurred noised image")
+plot_image(im, "noised image")
 plot_spectre(im)
 
-denoised = nonlinear_denoiser (im, 0.0833)
+denoised = nonlinear_denoiser (im, .0833)
 plot_image(denoised, "denoised")
 plot_spectre(denoised)
 

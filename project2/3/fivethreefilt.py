@@ -6,6 +6,7 @@ import pywt
 import scipy.signal as scs
 from PIL import Image
 from quantizer import quantizer
+import math
 
 # Global variable for recursion purposes
 # Count is used for to obtain a specific depth recursive DWT
@@ -15,12 +16,27 @@ count = 0
 another = 0
 coeff_arr =[]
 
-def len_debug(LL,LH,HL,HH):
-    print("LL dims",len(LL), len(LL[0]))
-    print("LH dims",len(LH), len(LH[0]))
-    print("HL dims",len(HL), len(HL[0]))
-    print("HH dims",len(HH), len(HH[0]))
+def MSE (im1, im2):
+    im1 = np.array(im1)
+    im2 = np.array(im2)
+    err = np.square(np.subtract(im1,im2)).mean()
+    return err
+
+def MSEC (c1, c2):
+    sum = 0
+    (LL1,(LH1,HL1,HH1)) = c1    
+    (LL2,(LH2,HL2,HH2)) = c2
+    errLL = np.square(np.subtract(LL1, LL2)).mean()
+    sum += errLL
+    errLH = np.square(np.subtract(LH1, LH2)).mean()
+    sum += errLH
+    errHL = np.square(np.subtract(HL1, HL2)).mean()
+    sum += errHL
+    errHH = np.square(np.subtract(HH1, HH2)).mean()
+    sum += errHH
     
+    return sum
+
 def filter(pic, depth):
     
     # Application of the dwt using 5/3 filter and a periodic copy
@@ -54,8 +70,6 @@ def filter(pic, depth):
     return four_grid
 
 
-
-
 def reconstruct(coeff_arr, im):
     global another
     # get saved coeeficients from array
@@ -72,7 +86,7 @@ def reconstruct(coeff_arr, im):
         return rec_im
 
 # load image
-x = Image.open("boats512x512.tiff")
+x = Image.open("peppers512x512.tiff")
 # remove extension from file name
 x.filename = x.filename[:-12]
 
@@ -109,25 +123,89 @@ def quantize_coeff(arr,step):
     new = [0,0,0,0]
     for iter in range(len(qt_coeff_arr)):
         (LL,(LH, HL, HH)) = qt_coeff_arr[iter]
+        # quantize each quadrant
         LLQ = quantizer(np.array(LL, dtype=np.float64), step)
         LHQ = quantizer(np.array(LH, dtype=np.float64), step)
         HLQ = quantizer(np.array(HL, dtype=np.float64), step)
         HHQ = quantizer(np.array(HH, dtype=np.float64), step)
-        # len_debug(LL,LH,HL,HH)
         new[iter] = (LLQ,(LHQ, HLQ, HHQ))
     return new
+
+PSNR_vec = []
+entropy_vec = []
+mse_savedim = []
+mse_ceoffs = []
 
 for z in range(10):
     another = 0
     step = (256/2**z)
+
     # quanztize coefficients with specified step
     qt_ca = quantize_coeff(coeff_arr,step)
+
     # reconstruct original image using save quantized coefficients
-    # len_debug(LLQ, LHQ, HLQ, HHQ)    
     (LLQ,(LHQ, HLQ, HHQ)) = qt_ca[0]
     qunatized_recon = reconstruct(qt_ca, LLQ)
-    # Image.fromarray(qunatized_recon.astype(np.uint8), 'L').save(f'QT_{step}_{x.filename}.png')
+    
+    # Calculate histogram for each quantized image
+    hist = np.zeros(256)
+    for pix in np.array(qunatized_recon, dtype=np.uint8):
+        hist[pix] += 1
+    pdf = hist/(512*512)
+    
+    # Calcualte entropy of each pixel and sum for total entropy
+    total_entropy = 0
+    for f in pdf:
+        if f != 0:
+            total_entropy += -1 * f * math.log(f, 2)
+    
+    # calcualte MSE between orignal coefficients and quantized coefficients
+    MSE_SUM = 0
+    for i in range(len(qt_ca)):
+        sum = MSEC(qt_ca[i], coeff_arr[i])
+        MSE_SUM += sum
+    mse_ceoffs.append(MSE_SUM)
+
+    # save entropy values to vector
+    entropy_vec.append(total_entropy)
+        
+    # calculate PSNR between base image and quantized images
+    PSNR_vec.append(cv2.PSNR(qunatized_recon, np.array(x, dtype=np.float64)))
+
+    # Save quanztized images
     plt.imsave(f'QT_{step}_{x.filename}.png', qunatized_recon, cmap=plt.cm.gray)
     plt.close()
     
+    qim = Image.open(f'QT_{step}_{x.filename}.png')
+    rec = Image.open(f'REC_{x.filename}.png')
+    mse_savedim.append(MSE(qim,rec))
+    
+    
+    
+mse_ceoffs.reverse()
+mse_savedim.reverse()
+
+
+x_vector = [0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0]
+plt.plot(x_vector, PSNR_vec)
+plt.title(f'PSNR/bit-rate of {x.filename} image')
+plt.ylabel('PSNR')
+plt.xlabel('bit-rate')
+# Plot histrogram
+plt.savefig(f'PSNR_{x.filename}.png')
+# Save plotted histogram
+plt.clf()
+# clears figure
+
+plt.plot(x_vector, mse_ceoffs, 'r', label='d of coefficients')
+plt.plot(x_vector, mse_savedim, 'g', label='d of images')
+plt.legend()
+plt.ylabel('MSE')
+plt.xlabel('step-size')
+# Plot histrogram
+plt.savefig(f'MSE__{x.filename}.png')
+# Save plotted histogram
+plt.clf()
+# clears figure
+
 

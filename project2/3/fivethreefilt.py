@@ -135,6 +135,7 @@ PSNR_vec = []
 entropy_vec = []
 mse_savedim = []
 mse_ceoffs = []
+norm_en_vec = []
 
 for z in range(10):
     another = 0
@@ -147,18 +148,51 @@ for z in range(10):
     (LLQ,(LHQ, HLQ, HHQ)) = qt_ca[0]
     qunatized_recon = reconstruct(qt_ca, LLQ)
     
-    # Calculate histogram for each quantized image
-    hist = np.zeros(256)
-    for pix in np.array(qunatized_recon, dtype=np.uint8):
-        hist[pix] += 1
-    pdf = hist/(512*512)
+    # extract coefficeints needed to caculate entropy (13 subbands)
+    #  ______________
+    # |      |       |
+    # |  LL  |  LH   |
+    # |______|_______|
+    # |      |       |
+    # |  HL  |  HH   |
+    # |______|_______|
+    # 
     
-    # Calcualte entropy of each pixel and sum for total entropy
+    co_en = []
+    # first top left lowband (image)
+    co_en.append(LLQ)
+    # 12 other spare bands
+    for c in qt_ca:
+        (_,(LHC,HLC,HHC)) = c
+        co_en.append(LHC)
+        co_en.append(HLC)
+        co_en.append(HHC)
+    
+            
+    # Calculate histogram for each subband
+    sen_v = []
     total_entropy = 0
-    for f in pdf:
-        if f != 0:
-            total_entropy += -1 * f * math.log(f, 2)
-    
+    for subband in co_en:
+        hist = np.zeros(5000)
+        
+        for r in subband:
+            for pix in r:
+                pix = int(pix)
+                hist[pix] += 1 /(len(subband) * len(subband[0]))
+        
+            
+        # Calcualte entropy of each pixel and sum for total entropy
+        subband_entropy = 0
+        for f in hist:
+            if f != 0:
+                subband_entropy += -1 * f * math.log(f, 2)
+        
+        bpp = subband_entropy / (len(subband * len(subband[0])))
+        total_entropy += bpp
+        # sen_v.append(total_entropy)
+                
+    entropy_vec.append(total_entropy/13)
+        
     # calcualte MSE between orignal coefficients and quantized coefficients
     MSE_SUM = 0
     for i in range(len(qt_ca)):
@@ -166,8 +200,6 @@ for z in range(10):
         MSE_SUM += sum
     mse_ceoffs.append(MSE_SUM)
 
-    # save entropy values to vector
-    entropy_vec.append(total_entropy)
         
     # calculate PSNR between base image and quantized images
     PSNR_vec.append(cv2.PSNR(qunatized_recon, np.array(x, dtype=np.float64)))
@@ -180,17 +212,15 @@ for z in range(10):
     rec = Image.open(f'REC_{x.filename}.png')
     mse_savedim.append(MSE(qim,rec))
     
-    
-    
 mse_ceoffs.reverse()
 mse_savedim.reverse()
-
+print(entropy_vec)
 
 x_vector = [0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0]
-plt.plot(x_vector, PSNR_vec)
-plt.title(f'PSNR/bit-rate of {x.filename} image')
+plt.plot(entropy_vec, PSNR_vec)
+plt.title(f'PSNR/rate of {x.filename} image')
 plt.ylabel('PSNR')
-plt.xlabel('bit-rate')
+plt.xlabel('bits per pixel')
 # Plot histrogram
 plt.savefig(f'PSNR_{x.filename}.png')
 # Save plotted histogram

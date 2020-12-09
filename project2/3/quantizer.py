@@ -11,7 +11,7 @@ def quantizer(x, step_size):
     y = np.zeros(x.shape)
     for i in range(len(y)):
         for j in range(len(y[0])):
-            y[i,j] = ((x[i,j] + step_size/2) // step_size) * step_size
+            y[i,j] = step_size * np.floor(x[i,j] / step_size + 0.5)
     return y
 
 # z = Image.open('harbour.png')

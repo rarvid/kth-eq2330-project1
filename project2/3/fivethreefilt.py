@@ -19,21 +19,15 @@ coeff_arr =[]
 def MSE (im1, im2):
     im1 = np.array(im1)
     im2 = np.array(im2)
-    err = np.square(np.subtract(im1,im2)).mean()
+    err = np.mean(np.square(np.subtract(im1,im2)))
     return err
 
 def MSEC (c1, c2):
+    assert(len(c1) == len(c2))
     sum = 0
-    (LL1,(LH1,HL1,HH1)) = c1    
-    (LL2,(LH2,HL2,HH2)) = c2
-    errLL = np.square(np.subtract(LL1, LL2)).mean()
-    sum += errLL
-    errLH = np.square(np.subtract(LH1, LH2)).mean()
-    sum += errLH
-    errHL = np.square(np.subtract(HL1, HL2)).mean()
-    sum += errHL
-    errHH = np.square(np.subtract(HH1, HH2)).mean()
-    sum += errHH
+    for i in range(len(c1)):
+        sum += np.mean(np.square(np.subtract(c1[i], c2[i])))
+    
     
     return sum
 
@@ -86,7 +80,7 @@ def reconstruct(coeff_arr, im):
         return rec_im
 
 # load image
-x = Image.open("peppers512x512.tiff")
+x = Image.open("harbour512x512.tiff")
 # remove extension from file name
 x.filename = x.filename[:-12]
 
@@ -135,11 +129,22 @@ PSNR_vec = []
 entropy_vec = []
 mse_savedim = []
 mse_ceoffs = []
-norm_en_vec = []
+
+(LLO,(LHO,HLO,HHO)) = coeff_arr[0]
+org_co = []
+# array of 13 original subbands
+org_co.append(LLO)
+
+    
+for co in coeff_arr:
+    (_,(LHC,HLC,HHC)) = co
+    org_co.append(LHC)
+    org_co.append(HLC)
+    org_co.append(HHC)
 
 for z in range(10):
-    another = 0
-    step = (256/2**z)
+    another = 0  
+    step = 2**z
 
     # quanztize coefficients with specified step
     qt_ca = quantize_coeff(coeff_arr,step)
@@ -172,35 +177,36 @@ for z in range(10):
     # Calculate histogram for each subband
     sen_v = []
     total_entropy = 0
+    av_d = 0
     for subband in co_en:
         hist = np.zeros(5000)
-        
+
+        # Calculate histogram of subband
         for r in subband:
             for pix in r:
                 pix = int(pix)
                 hist[pix] += 1 /(len(subband) * len(subband[0]))
         
-            
-        # Calcualte entropy of each pixel and sum for total entropy
+        # Calcualte entropy of each pixel and sum for total entropy of subband
         subband_entropy = 0
         for f in hist:
             if f != 0:
                 subband_entropy += -1 * f * math.log(f, 2)
         
-        bpp = subband_entropy / (len(subband * len(subband[0])))
-        total_entropy += bpp
-        # sen_v.append(total_entropy)
-                
+        # Calculate TOTAL entropy
+        total_entropy += subband_entropy
+        
+        # Calculate MSE of subband
+        total_d = MSEC(org_co, co_en)
+        # Calcualte average mse
+        av_d = total_d / 13
+    
+    # Add the average entropy of 13 subbands to a value vector for plotting
     entropy_vec.append(total_entropy/13)
         
-    # calcualte MSE between orignal coefficients and quantized coefficients
-    MSE_SUM = 0
-    for i in range(len(qt_ca)):
-        sum = MSEC(qt_ca[i], coeff_arr[i])
-        MSE_SUM += sum
-    mse_ceoffs.append(MSE_SUM)
-
-        
+    # Add average MSE to value vector for plotting
+    mse_ceoffs.append(av_d)
+    
     # calculate PSNR between base image and quantized images
     PSNR_vec.append(cv2.PSNR(qunatized_recon, np.array(x, dtype=np.float64)))
 
@@ -212,30 +218,37 @@ for z in range(10):
     rec = Image.open(f'REC_{x.filename}.png')
     mse_savedim.append(MSE(qim,rec))
     
-mse_ceoffs.reverse()
-mse_savedim.reverse()
 print(entropy_vec)
+print(mse_ceoffs)
+print(mse_savedim)
 
-x_vector = [0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0]
+x_vector = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512]
 plt.plot(entropy_vec, PSNR_vec)
 plt.title(f'PSNR/rate of {x.filename} image')
 plt.ylabel('PSNR')
-plt.xlabel('bits per pixel')
+plt.xlabel('bit-rate')
 # Plot histrogram
 plt.savefig(f'PSNR_{x.filename}.png')
 # Save plotted histogram
 plt.clf()
 # clears figure
 
-plt.plot(x_vector, mse_ceoffs, 'r', label='d of coefficients')
-plt.plot(x_vector, mse_savedim, 'g', label='d of images')
-plt.legend()
+plt.plot(x_vector, mse_ceoffs, 'r')
+plt.title("Distortion between coefficients")
 plt.ylabel('MSE')
 plt.xlabel('step-size')
 # Plot histrogram
-plt.savefig(f'MSE__{x.filename}.png')
+plt.savefig(f'MSE_COEF{x.filename}.png')
 # Save plotted histogram
 plt.clf()
 # clears figure
 
-
+plt.plot(x_vector, mse_savedim, 'g')
+plt.title("Distortion between images")
+plt.ylabel('MSE')
+plt.xlabel('step-size')
+# Plot histrogram
+plt.savefig(f'MSE_{x.filename}.png')
+# Save plotted histogram
+plt.clf()
+# clears figure

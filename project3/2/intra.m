@@ -14,5 +14,5 @@ function res = dct_blocks(im) % divide frame into 16x16 blocks
   yvector_8 = 8*ones(1, sizey ./ 8 );
   % split frame into 16x16 blocks
   blocks_8 = mat2cell(im,xvector_8,yvector_8);
-  res = blocks_8;
+  res = cellfun(@dct2, blocks_8, 'UniformOutput', 0);
 end

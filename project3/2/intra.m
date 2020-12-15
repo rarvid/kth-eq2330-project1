@@ -19,10 +19,105 @@ recon = reconstruct(var_quant);
 
 % cell array with 4 videos, each with 50 frames, where each frame is a
 % 176x144 uint8 array
-ui8rec = double2uint8(recon);
+rounded_rec = doubleround(recon);
 
 % A matlab video format structure to view frames as videos
-vid = cell2video(ui8rec{4,1});
+vid = cell2video(rounded_rec{4,1});
+
+% Cell array with 4 videos each with 50 PSNR values, i.e. each frame of the
+% reconstructions compared with the original 50 frames
+psnr_frames = psnr_mult(rounded_rec, foreman);
+
+% cell array with average PSNR of 50 frames from 4 different quantization
+% levels
+avg_psnr = avg(psnr_frames);
+
+% obtain 16x16 blocks with 4 8x8 DCT blocks 
+quanted_16_16 = merge_cells(var_quant);
+
+% entropies of each 16x16 block
+entropy_255 = entropy_blocks(quanted_16_16);
+
+% average entropy of each frame
+average_entropy = avg_entropy(entropy_255);
+
+% TODO bitrate calculation and PLOTS
+
+function avge = avg_entropy(cellar)
+  [levels, ~] = size(cellar);
+  for i = 1:levels
+    [frames, ~] = size(cellar{i,1});
+    for j = 1:frames
+      matrix = cell2mat(cellar{i,1}{j,1});
+      avge{i,1}{j,1} = mean(matrix(:)); 
+    end
+  end
+end
+
+% get entropies of each 16x16 block
+function e = entropy_blocks(cellar)
+  [levels, ~] = size(cellar);
+  for i = 1:levels
+    [frames, ~] = size(cellar{i,1});
+    for j = 1:frames
+      [blocks_x, blocks_y] = size(cellar{i,1}{j,1});
+      for k = 1:blocks_x
+        for l = 1:blocks_y
+          e{i,1}{j,1}{k,l} = entropy_single(cellar{i,1}{j,1}{k,l});
+        end
+      end
+    end
+  end
+end
+
+function en = entropy_single(array)
+  U = unique(array);
+  H = histcounts(array, U);
+  pdf = H / 256;
+  total_entropy = 0;
+  for i = 1:length(pdf)
+    total_entropy = total_entropy + (pdf(i) .* -log2(pdf(i)));
+  end
+  en = total_entropy;
+end
+
+% merge 4 8x8 cell blocks to obatin 16x16 blocks( needed for entropy calc)
+function m = merge_cells(cellar)
+  [levels, ~] = size(cellar);
+  for i = 1:levels
+    [frames, ~] = size(cellar{i,1});
+    for j = 1:frames
+      % merge 8x8 DCT block together
+      cellar{i,1}{j,1} = cell2mat(cellar{i,1}{j,1});
+      [resx ,resy] = size(cellar{i,1}{j,1});
+      xvector_16 = 16 * ones(1, resx ./ 16);
+      yvector_16 = 16 * ones(1, resy ./ 16);
+      m{i,1}{j,1} = mat2cell(cellar{i,1}{j,1}, xvector_16, yvector_16);
+    end
+  end
+end
+
+
+% Calculate average of cells
+function a = avg(cellar)
+  [levels, ~] = size(cellar);
+  for i = 1:levels
+    a{i,1} = mean(cell2mat(cellar{i,1}));
+  end
+end
+
+% returns a cell arrary with 'i' cells with 'j' PSNR values, comparing 'i'
+% differnet quantization levels and the original image
+function p = psnr_mult(vid, orig)
+  [levels, ~] = size(vid);
+  for i = 1:levels
+    [frames, ~] = size(vid{i,1});
+    for j = 1:frames
+      psnr_frames{i,1}{j,1} = psnr(vid{i,1}{j,1}, orig{j,1}, 255);
+      p = psnr_frames;
+    end
+  end
+end
 
 % Takes a cell with 'i' frames and converts it into a matlab video structure
 function vid = cell2video(cellar)
@@ -35,15 +130,15 @@ function vid = cell2video(cellar)
   end
 end
 
-
 % Takes a cell array with 'i' videos each with 'j' frames and converts the
 % frames from double to uint8
-function rund = double2uint8(vals)
+function rund = doubleround(vals)
   [levels, ~] = size(vals);
   for i = 1:levels
     [frames, ~] = size(vals{i,1});
     for j = 1:frames
       rund{i,1}{j,1} = uint8(vals{i,1}{j,1});
+      rund{i,1}{j,1} = double(rund{i,1}{j,1});
     end
   end
 end

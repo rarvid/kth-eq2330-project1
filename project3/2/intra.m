@@ -1,6 +1,6 @@
 % extract first 50 frames from foreman video
 % cell array with 50 frames(cells) - 176x144 double array
-foreman = yuv_import_y('mother-daughter_qcif.yuv',[176 144],50);
+foreman = yuv_import_y('foreman_qcif.yuv',[176 144],50);
 
 % cell array with 50 frames(cells), each frame contains 18x22 cell array,
 % each cell array cotains 8x8 double arrays - DCT block. DCT2 has been
@@ -47,11 +47,11 @@ kbitrate_s = bitrate(average_entropy);
 %  PSNR kBit/s plot
 figure('visible','off');
 plot(cell2mat(kbitrate_s)', cell2mat(avg_psnr)','LineWidth',1);
-title('mother-daughter')
+title('foreman')
 xlabel('kbit/s')
 ylabel('PSNR')
 p_b_plot = gca;
-exportgraphics(p_b_plot, 'PSNR_kBit_s_mother_daughter_plot.png');
+exportgraphics(p_b_plot, 'PSNR_kBit_s_foreman_plot.png');
 
 function b = bitrate(entr)
   [levels, ~] = size(entr);

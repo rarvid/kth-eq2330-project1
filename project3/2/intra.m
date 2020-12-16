@@ -1,6 +1,6 @@
 % extract first 50 frames from foreman video
 % cell array with 50 frames(cells) - 176x144 double array
-foreman = yuv_import_y('foreman_qcif.yuv',[176 144],50);
+foreman = yuv_import_y('mother-daughter_qcif.yuv',[176 144],50);
 
 % cell array with 50 frames(cells), each frame contains 18x22 cell array,
 % each cell array cotains 8x8 double arrays - DCT block. DCT2 has been
@@ -41,8 +41,32 @@ entropy_255 = entropy_blocks(quanted_16_16);
 % average entropy of each frame
 average_entropy = avg_entropy(entropy_255);
 
-% TODO bitrate calculation and PLOTS
+% bitrate calculation
+kbitrate_s = bitrate(average_entropy);
 
+%  PSNR kBit/s plot
+figure('visible','off');
+plot(cell2mat(kbitrate_s)', cell2mat(avg_psnr)','LineWidth',1);
+title('mother-daughter')
+xlabel('kbit/s')
+ylabel('PSNR')
+p_b_plot = gca;
+exportgraphics(p_b_plot, 'PSNR_kBit_s_mother_daughter_plot.png');
+
+function b = bitrate(entr)
+  [levels, ~] = size(entr);
+  for i = 1:levels
+    [frames, ~] = size(entr{i,1});
+    duration = frames ./ 30;
+    entropy_matrix = cell2mat(entr{i,1});
+    cum_entropy = sum(entropy_matrix);
+    b{i,1} = cum_entropy ./ duration;
+    b{i,1} = b{i,1} ./ 1000; 
+  end
+end
+
+
+% Calculate the average entropy of each frame
 function avge = avg_entropy(cellar)
   [levels, ~] = size(cellar);
   for i = 1:levels

@@ -26,7 +26,6 @@ rounded_rec = doubleround(recon);
 % rounded_rec is the reconstructed image for the distortion of the
 % intra mode
 
-
 % from 8×8 to 16×16
 data = merge_cells(data_8_8);
 
@@ -82,7 +81,7 @@ title('')
 xlabel('kbit/s')
 ylabel('PSNR')
 p_b_plot = gca;
-exportgraphics(p_b_plot, 'PSNR_kBit_s_mother_daughter_plot.png');
+exportgraphics(p_b_plot, '3_mother_plot.png');
 
 
 %%%%%%%%%%%%%%%% LOCAL FUNCTIONS %%%%%%%%%%%%%%%%%

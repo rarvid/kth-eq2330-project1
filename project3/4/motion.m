@@ -1,18 +1,15 @@
 
 input  = yuv_import_y('foreman_qcif.yuv',[176 144],50);
 
-[motion_vectors, error_blocks] = SSD(input);
+[motion_vectors, residuals, distortion] = SSD(input);
 
 % to view residuals as video do this and implay the result
 % error_frames = merge_16(error_blocks);
 % error_vid = cell2video(error_frames);
 % imshow(127 + error_frames{1,1})
 
-function Dn = distortion(video,residuals)
-  %
-end
 
-function [resarray, error_im]= SSD(vid)
+function [motions_vectors, residuals, distortion]= SSD(vid)
   [frames,~] = size(vid);
   for i = 1:frames-1
     [pixel_x, pixel_y] = size(vid{i,1});
@@ -31,8 +28,9 @@ function [resarray, error_im]= SSD(vid)
         % itterate over displacement range [-10,...,10] x [-10,...,10]
         for dx = -10:10
           for dy = -10:10
+            % check for edge cases
             if (k + dx > 0) && (k + 15 + dx <= pixel_x) && (l + dy > 0) && (l + 15 + dy <= pixel_y)
-              sqdif = (current(k+dx:k+15+dx,l+dy:l+15+dy) - prev(k:k+15,l:l+15)).^2;
+              sqdif = (current(k:k+15,l:l+15) - prev(k+dx:k+15+dx,l+dy:l+15+dy)).^2;
               ssd = mean(sqdif(:));
               if ssd < min_val
                 min_val = ssd;
@@ -40,13 +38,14 @@ function [resarray, error_im]= SSD(vid)
                 min_x = dx;
                 min_y = dy;
                 % min error image
-                e = current(k+dx:k+15+dx,l+dy:l+15+dy) - prev(k:k+15,l:l+15);
+                e = current(k:k+15,l:l+15) - prev(k+dx:k+15+dx,l+dy:l+15+dy);
               end
             end
           end
         end
-        resarray{i,1}{k - iter_k * 15, l - iter_l * 15} = [min_x, min_y];
-        error_im{i,1}{k - iter_k * 15, l - iter_l * 15} = e;
+        motions_vectors{i,1}{k - iter_k * 15, l - iter_l * 15} = [min_x, min_y];
+        residuals{i,1}{k - iter_k * 15, l - iter_l * 15} = e;
+        distortion{i,1}{k - iter_k * 15, l - iter_l * 15} = min_val;
         iter_l = iter_l + 1;
       end
       iter_k = iter_k + 1;

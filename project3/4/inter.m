@@ -1,10 +1,11 @@
 %-----------------%
 % Header comments %
+% Yeah, again  :p %
 %-----------------%
 
 % extract first 50 frames from foreman video
 % cell array with 50 frames(cells) - 176x144 double array
-foreman = yuv_import_y('mother-daughter_qcif.yuv',[176 144],50);
+foreman = yuv_import_y('foreman_qcif.yuv',[176 144],50);
 
 data_8_8 = cell(4, 1);
 for i = 3:6
@@ -33,6 +34,10 @@ data = merge_cells(data_8_8);
 % so that we have the R1 used in the langragian function.
 intra_bit_rate = cellfun(@bit_rate, data, 'UniformOutput',0);
 
+% part 4: do the inter-frame coding
+[motion_vectors, uncompressed_residuals, distortion] = SSD(foreman);
+residuals = cell(4,1);
+
 % add the encoding of the mode. data will become a data encoded entirely
 % in intra mode (extra byte = 1)
 for i = 3:6
@@ -53,16 +58,30 @@ for i = 3:6
     end
 end
 
-% encode the data with intra or copy mode, block-wise
+inter_bit_rate = cell(4,1);
+
+for i = 3:6
+    % Let's encode the rediduals with DCT + quantization
+    residuals{i-2, 1} = compress_residual(uncompressed_residuals, 2.^i);
+    % bit rate of that
+    inter_bit_rate{i-2, 1} = bit_rate(residuals{i-2, 1}) + 9.0 / 256.0;
+    % we have an extra cost of 9 bits per block to encode the motion vector
+end
+
+% encode the data with intra, copy or inter mode, block-wise
 for i = 3:6
     index = i - 2;
     step_size = 2. ^ i;
-    
-    data{index,1} = encode_video(data{index,1}, foreman, step_size, intra_bit_rate{index,1});
+    % long line -_-
+    data{index,1} = encode_video_three_modes(data{index,1}, foreman, step_size, intra_bit_rate{index,1}, distortion, inter_bit_rate{index,1}, motion_vectors, residuals{index,1});
 end
 
-% compute the bit rates now with the two-modes brand-new encoding
-rates = cellfun(@bit_rate_two_modes, data, 'UniformOutput',0);
+rates = cell(4,1);
+% computethe bit rates now with the three-modes brand-new encoding
+for i = 1:4
+    rates{i,1} = bit_rate_three_modes(data{i,1}, inter_bit_rate{i,1});
+end
+
 
 % convert the rates (bit/pixel) into raw kbit/s (not per pixel any more)
 [w, h] = size(foreman{1,1});
@@ -71,7 +90,7 @@ for i = 1:length(rates)
 end
 
 % rebuild the original vidéos
-recons = cellfun(@reconstruct_two_modes, data, 'UniformOutput',0);
+recons = cellfun(@reconstruct_three_modes, data, 'UniformOutput',0);
 
 psnrs = psnr_mult(recons, foreman);
 %  PSNR kBit/s plot
@@ -81,13 +100,13 @@ title('')
 xlabel('kbit/s')
 ylabel('PSNR')
 p_b_plot = gca;
-exportgraphics(p_b_plot, '3_mother_plot.png');
+exportgraphics(p_b_plot, '4_foreman_plot.png');
 
 
 %%%%%%%%%%%%%%%% LOCAL FUNCTIONS %%%%%%%%%%%%%%%%%
 
 % reconstrictopn
-function recons = reconstruct_two_modes(vid)
+function recons = reconstruct_three_modes(vid)
     recons = cell(size(vid));
     
     deux = size(vid{1,1}) .* size(vid{1,1}{1,1}{2,1});
@@ -129,17 +148,17 @@ function a = avg(cellar)
   end
 end
 
-% Une fonction des plus affreuses.
-function rate = bit_rate_two_modes(vid)
+% Une fonction des plus nébuleuses.
+function rate = bit_rate_three_modes(vid, R3)
     [len, ~] = size(vid);
     [Lx, Ly] = size(vid{1,1});
     
     total_pixel_count = len * Lx * Ly;
-    % This array will store the pixels' values before we compute the
-    % entropy on it.
-    pixels = zeros(total_pixel_count, 1);
-    % We want a 1-dim list
-    pixels = pixels (:);
+    % This array will store the intra-mode encoded pixels' values before
+    % we compute the entropy on it.
+    intra_pixels = zeros(total_pixel_count, 1);
+    
+
     
     total_entropy = 0.0;
     
@@ -150,15 +169,21 @@ function rate = bit_rate_two_modes(vid)
             
             % index in the pixels list.
             idx = 1;
-            
+            inter_pixel_count = 0;
+    
             for k = 1:len
                 for i = 1:Lx
                     for j = 1:Ly
                         
-                        if vid{k, 1}{i,j}{1,1} == 1 % check intra mode
+                        if vid{k, 1}{i,j}{1,1} == 1 % intra mode
                             pixel = vid{k,1}{i,j}{2,1}(u,v);
-                            pixels(idx, 1) = pixel;
+                            intra_pixels(idx, 1) = pixel;
                             idx = idx + 1;
+                        
+                        elseif vid{k, 1}{i,j}{1,1} == 3 % inter mode
+                            inter_pixel_count = inter_pixel_count + 1;
+                        else
+                            % copy mode: pixel are not encoded.
                         end
                         
                     end
@@ -166,25 +191,21 @@ function rate = bit_rate_two_modes(vid)
             end
             
             % Now we can compute the (u,v)-th entropy.
-            list = pixels( 1:(idx-1) );
-            total_entropy = total_entropy + entropy(list) * (idx-1) / total_pixel_count;
-            % It is tricky now because the VLC's average length is no longer
-            % the average per-pixel length, as some pixels are shadowed by
-            % the copy mode. A corrective factor (idx-1) / total_pixel_count
-            % has to be included. All pixels encoded by the VLC take
-            % entropy bits and all pixels encoded by the copy mode take
-            % zero bit.
+            list = intra_pixels( 1:(idx-1) );
+            % sum over the 3 mdoes
+            total_entropy = total_entropy + (entropy(list) * (idx-1) + R3*inter_pixel_count) / total_pixel_count;
+            
         end
         
     end
     
-    % Oh yeah! Every block of 16×16 pixels has an extra bit to encode the
-    % mode, so each pixel requires 1/16² extra bit.
-    rate = total_entropy / 256.0  + 1.0 / 256.0;
+    % Oh yeah! Every block of 16×16 pixels has two extra bits to encode the
+    % mode, so each pixel requires 2/16² extra bit.
+    rate = total_entropy / 256.0  + 2.0 / 256.0;
     
 end
-% Adapation of the above function to work with only the intra-mode.
-% this function is the first one to be called.
+% Adapation of the above function to work with only the intra-mode or iter mode's residuals.
+% this function is the first one to be called, and is called twice.
 function rate = bit_rate(vid)
     [len, ~] = size(vid);
     [Lx, Ly] = size(vid{1,1});
@@ -250,18 +271,19 @@ function H = entropy(list)
     
 end
 
-function new_vid = encode_video(vid, orig_vid, step_size, intra_bit_rate)
+function new_vid = encode_video_three_modes(vid, orig_vid, step_size, intra_bit_rate, distortion_3, inter_bit_rate, motions, residuals)
     [len, ~] = size(vid);
     new_vid = cell(len, 1);
     new_vid{1,1} = vid{1,1};
     
     for i = 2:len
-        new_vid{i,1} = encode_frame(new_vid{i-1, 1},vid{i,1},orig_vid{i,1},0.2*step_size*step_size,intra_bit_rate);
+        % pffff daphuque long line
+        new_vid{i,1} = encode_frame_three_modes(new_vid{i-1, 1}, vid{i,1}, orig_vid{i,1}, 0.2*step_size*step_size, intra_bit_rate, distortion_3{i-1, 1}, inter_bit_rate, motions{i-1,1}, residuals{i-1,1});
     end
 end
 
-% Une fonction des plus ténèbreuses.
-function new_frame = encode_frame(previous, current, curr_original, lambda, R1)
+% Une fonction des plus désastreuses.
+function new_frame = encode_frame_three_modes(previous, current, curr_original, lambda, R1, distortion_3, R3, motion, residual)
     % previous and current are two consecutive frames (in DCTed
     % form, encoded in mode intra). Cells filled with 16×16 blocks
     
@@ -278,7 +300,8 @@ function new_frame = encode_frame(previous, current, curr_original, lambda, R1)
             
             % distortion of mode intra
             D1 = immse( idct16(curr_block), orig_block);
-            % the bit rate of mode intra, R1, is already given in argument
+            % bit rate of mode intra
+            % R1 already given in argument
             
             % distortion of mode copy
             prev_block = previous{i,j}{2,1};
@@ -286,26 +309,102 @@ function new_frame = encode_frame(previous, current, curr_original, lambda, R1)
             % bit rate of mode copy
             R2 = 1 ./ 256; % yep! only one bit of information of 256 pixels!
             
+            % distortion of mode inter
+            D3 = distortion_3{i, j};
+            % bit rate of mode inter
+            % R3 already given in argument
+            
             % the aiguillage is here
             cellule = cell(2,1);
             if D1 + lambda * R1 < D2 + lambda * R2
-                % intra mode wins
-                % we do nothing as the current frame is already in intra
-                % mode. The only thing to do it to copy.
-                cellule{1,1} = 1;
-                cellule{2,1} = curr_block;
+                if D1 + lambda * R1 < D3 + lambda * R3
+                    % intra mode wins
+                    % we do nothing as the current frame is already in intra
+                    % mode. The only thing to do it to copy.
+                    cellule{1,1} = 1;
+                    cellule{2,1} = curr_block;
+                else
+                    % inter
+                    cellule{1,1} = 3;
+                    % encode the intra mode DCTed coefficient.
+                    cellule{2,1} = curr_block;
+                end
             else
-                % copy mode wins
-                cellule{1,1} = 2;
-                cellule{2,1} = prev_block; % normally that cell should be empty
-                % I write the intra instead of nothing to ease the
-                % calculation. The bit-rate will be computed as if
-                % no pixels were stoted here.
+                if D3 + lambda * R3 < D2 + lambda * R2
+                    % inter again. Code duplication do you write it?
+                    cellule{1,1} = 3;
+                    cellule{2,1} = curr_block;
+                else
+                    % copy mode wins
+                    cellule{1,1} = 2;
+                    cellule{2,1} = prev_block; % normally that cell should be empty.
+                    % I write the intra instead of nothing to ease the
+                    % calculation.
+                end
+                
             end
+            
+            
             new_frame{i,j} = cellule;
         end
     end
     
+end
+
+function res = reconstruct_mode_3(i, j, motion, residual, prev_frame)
+    res = idct16(residual);
+    dx = motion(1);
+    dy = motion(2); % curr(0,0) ~ prev(dx,dy)
+    
+    for u = 1:16
+        for v = 1:16
+            % we will copy pixel per pixel.
+            % transform the indexes i,j,u,v to fit the split-in-block frame
+            n = 16*(i-1) + u;
+            n = n + dx;
+            ip = floor((n-1)/16) + 1;
+            up = mod(n-1, 16) + 1;
+            %
+            m = 16*(j-1) + v;
+            m = m + dy;
+            jp = floor((m-1)/16) + 1;
+            vp = mod(m-1, 16) + 1;
+            
+            % finally
+            res(u,v) = prev_frame{ip, jp}{2,1}(up, vp);
+            
+        end
+    end
+end
+
+% Encode the residual
+function compressed = compress_residual(resi, step_size)
+    [Lx, Ly] = size(resi{1,1});
+    compressed = cell(length(resi), 1);
+    for k = 1:length(resi)
+        % pre-alloc
+        compressed{k,1} = cell(Lx, Ly);
+        for i = 1:Lx
+            for j = 1:Ly
+                % dct
+                compressed{k,1}{i,j} = dct16(resi{k,1}{i,j});
+                % quantization
+                for u = 1:16
+                    for v = 1:16
+                        compressed{k,1}{i,j}(u,v) = quantizer(resi{k,1}{i,j}(u,v), step_size);
+                    end
+                end
+            end
+        end
+    end
+end
+
+function blk = dct16(array)
+    % apply the idct to the four 8×8 sub-blocks
+    blk(1:8, 1:8)   = dct2(array(1:8, 1:8));
+    blk(9:16, 1:8)  = dct2(array(9:16, 1:8));
+    blk(1:8, 9:16)  = dct2(array(1:8, 9:16));
+    blk(9:16, 9:16) = dct2(array(9:16, 9:16));
 end
 
 function blk = idct16(array)
